@@ -72,6 +72,10 @@ export function geoRawMercator() {
         }
     }).stream;
 
+    projection.getInfo = function(){
+        return { x:x, y:y, k:k, clipExtent:clipExtent };
+    };
+
 
     return projection;
 }

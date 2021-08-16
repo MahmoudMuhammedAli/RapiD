@@ -149,6 +149,7 @@ export function rendererMap(context) {
         drawLayers
             .on('change.map', function() {
                 context.background().updateImagery();
+                //console.log( "map drawLayers on change.map" );
                 immediateRedraw();
             });
 
@@ -408,6 +409,7 @@ export function rendererMap(context) {
         drawAreas = svgAreas(projection, context);
         drawMidpoints = svgMidpoints(projection, context);
         drawLabels = svgLabels(projection, context);
+        //console.log( "MAP INIT", drawLayers );
     };
 
     function editOff() {
@@ -683,6 +685,7 @@ export function rendererMap(context) {
 
         if (!difference) {
             supersurface.call(context.background());
+            //console.log( "Map.redraw - WrapperCall( drawLayers )" ); 
             wrapper.call(drawLayers);
         }
 

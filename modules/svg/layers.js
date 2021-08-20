@@ -20,146 +20,10 @@ import { svgTouch } from './touch';
 import { utilRebind } from '../util';
 import { utilGetDimensions, utilSetDimensions } from '../util/dimensions';
 
-import { svgRapidFeatures } from './rapid_features';
-import { svgRapidFeaturesGL } from './rapid_features_gl';
-
-//##########################################################################
-
-//#region HELPER FUNCTIONS
-function newElm( elmName, cls, parent ){
-    const elm = document.createElementNS( 'http://www.w3.org/2000/svg', elmName );
-    elm.setAttribute( 'class', cls );
-    parent.appendChild( elm );
-    return elm;
-}
-//#endregion
-
-//#region LAYER CLASSES
-class BaseLayer{
-    constructor( id, layer ){
-        this.id         = id;
-        this.layer      = layer;
-        this.isReady    = false;
-    }
-
-    // Create Dom Elements to Support the Layer Rendering
-    initDom( root ){ console.warn( 'Layer.initDom is not implemented.' ); }
-
-    // Update the Rendering of the layer
-    update(){ console.warn( 'Layer.update is not implemented.' ); }
-
-    // Set Size of the Layer
-    setSize( v ){ console.warn( 'Layer.setSize is not implemented.' ); }
-}
-
-class SVGLayer extends BaseLayer{
-    update(){
-        //return;
-         // Update Layers by calling its Function with a select( svg.g );
-        if( this.isReady ) this.layer( this.svgGroup );
-    }
-
-    setSize( v ){ utilSetDimensions( this.svg, v ); }
-
-    initDom( root ){
-        if ( this.isReady ) return;
-        
-        //---------------------------
-        const svg = newElm( 'svg',    'surface',               root );
-                    newElm( 'defs',   'surface-defs',          svg );      // Things Break without defs
-                    newElm( 'svg',    'grids-svg',             svg );      
-        const g   = newElm( 'g',      'data-layer ' + this.id, svg );
-
-        //---------------------------
-        // TODO CSS this, Only doing it this way for Testing why layers aren't appearing, Making it float helps it finally take its w/h
-        svg.style.position  = 'absolute';
-        svg.style.top       = '0px';
-        svg.style.left      = '0px';
-
-        //---------------------------
-        this.svgGroup = d3_select( g );    // Layer Functions Expect G Wrapped in a D3 Selection
-        this.svg      = d3_select( svg );  // drawLayers.dimensions expect SVG Wrapped in D3 Selection
-        this.isReady  = true;
-
-        console.log( 'BUild SVG Layer' );
-    }
-}
-
-class GLLayer extends BaseLayer{
-}
-
-/*
-::: NOTES :::
-With the amount of things that needs to draw, there is flicker between clear & the drawing being completed.
-Possible solution is do something like a buffer swapchain.
-*/
-class CanvasLayer extends BaseLayer{
-    initDom( root ){
-        const c = document.createElement( 'canvas' );
-        root.appendChild( c );
-
-        this.canvas         = c;
-        this.ctx            = c.getContext( '2d', { desynchronized: true } ); //  Desynchronized Only Works in Windows/ChromeOS, Speeds up Rendering
-        this.width          = 0;
-        this.height         = 0;
-
-        c.style.position        = 'absolute';
-        c.style.top             = '0px';
-        c.style.left            = '0px';
-        c.style.imageRendering  = 'pixelated';  // For Hi Res Screens, make things pixelated instead of blurry
-
-        this.isReady        = true;
-    }
-
-    setSize( size ){
-        const c         = this.canvas;
-        const dpi       = window.devicePixelRatio;
-        c.style.width   = size[0] + 'px';
-        c.style.height  = size[1] + 'px';
-        c.width         = size[0] * dpi;
-        c.height        = size[1] * dpi;
-        this.width      = size[0];
-        this.height     = size[1];
-        this.ctx.scale( dpi, dpi );
-    }
-
-    update(){
-        if ( !this.isReady ) return;
-
-        //this.ctx.clearRect( 0, 0, this.width, this.height );
-
-        //this.ctx.fillStyle = '#ff0000';
-        //this.ctx.beginPath();
-		//this.ctx.rect( 0, 0, this.width, this.height );
-		//this.ctx.fill();
-
-        //this.circle( 10, 10, 50, '#00ff00' );
-        this.layer( this );
-    }
-
-    clear(){ this.ctx.clearRect( 0, 0, this.width, this.height ); }
-
-    circle( x, y, radius, fillColour=null, strokeColour=null, strokeSize=null ){
-        if ( !fillColour && !strokeColour ) return;
-
-		this.ctx.beginPath();
-		this.ctx.arc( x, y, radius,0,  Math.PI * 2, false );
-
-        if ( fillColour ){
-            this.ctx.fillStyle = fillColour;
-            this.ctx.fill();
-        }
-
-        if ( strokeColour ){
-            if ( strokeSize ) this.ctx.lineWidth = strokeSize;
-            this.ctx.strokeStyle = fillColour;
-            this.ctx.stroke();
-        }
-
-        return this;
-    }
-}
-//#endregion
+import { svgRapidFeatures }         from './rapid_features';
+import { svgRapidFeaturesCanvas }   from './rapid_features_canvas';
+import { svgRapidFeaturesPixi }     from './rapid_features_pixi';
+import { SVGLayer, CanvasLayer, PixiLayer } from "../layers/index.js";
 
 //##########################################################################
 
@@ -170,7 +34,8 @@ export function svgLayers(projection, context) {
     //===============================================================================
     var _layers     = [
         new SVGLayer( 'ai-features',        svgRapidFeatures( projection, context, dispatch ) ),
-        new CanvasLayer( 'ai-features-cv',  svgRapidFeaturesGL( projection, context, dispatch ) ),
+        //new CanvasLayer( 'ai-features-cv',  svgRapidFeaturesCanvas( projection, context, dispatch ) ),
+        new PixiLayer( 'ai-features-px',    svgRapidFeaturesPixi( projection, context, dispatch ) ),
         //new SVGLayer( 'osm',                svgOsm( projection, context, dispatch ) ),
         /*
         { id: 'ai-features', layer: svgRapidFeatures(projection, context, dispatch) },
@@ -317,7 +182,7 @@ export function svgLayers(projection, context) {
             //utilSetDimensions( l.svg, val );
             l.setSize( val );
         }
-       
+
         return this;
     };
 

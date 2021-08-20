@@ -79,7 +79,7 @@ function FNPolygonComputeWorker(){
 
 // #emdregion
 
-export function svgRapidFeaturesGL(projection, context, dispatch) {
+export function svgRapidFeaturesCanvas(projection, context, dispatch) {
   const RAPID_MAGENTA   = '#da26d3';
   const throttledRedraw = _throttle(() => dispatch.call('change'), 1000);
   const gpxInUrl        = utilStringQs(window.location.hash).gpx;
@@ -250,10 +250,11 @@ export function svgRapidFeaturesGL(projection, context, dispatch) {
             const ary = e.data;
             let poly, coord, pnt;
 
-            for ( poly of ary ){                 
+            canvas.fillColor( "#ff0000" );
+            for ( poly of ary ){
               for ( coord of poly.coordinates ){  // Poly is made of multiple sub polys basicly
                 for ( pnt of coord ){             // Points of the Sub Poly in Pixel Space
-                  canvas.circle( pnt[0], pnt[1], 5, '#ff0000' );
+                  canvas.circle( pnt[0], pnt[1], 5 );
                 }
               }
             }

@@ -1,5 +1,5 @@
 import BaseLayer    from './BaseLayer.js';
-import PIXI         from './lib/pixi.min.js';
+import * as PIXI    from 'pixi.js';
 
 class PixiLayer extends BaseLayer{
     initDom( root ){
@@ -7,10 +7,10 @@ class PixiLayer extends BaseLayer{
             width 			: 500,
             height 			: 500,
             resolution		: window.devicePixelRatio || 1,
+            autoDensity     : true,
             antialias       : true,
-            transparent     : true,
+            backgroundAlpha : 0,
         } );
-
         root.appendChild( this.app.view );
 
         //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

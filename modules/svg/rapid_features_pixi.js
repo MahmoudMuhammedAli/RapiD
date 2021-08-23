@@ -162,18 +162,21 @@ export function svgRapidFeaturesPixi( projection, context, dispatch ){
           .filter( d => d.type === 'way' && !_actioned.has(d.id) && !_actioned.has(d.__origid__) )  // see onHistoryRestore()
           ;//.filter( getPath ); 
 
-
         let paths = pathData.filter( isArea );
-        let pnt, coord, geo;
+        let pnt, coord, geo, flatArys, fa;
         if( paths.length > 0 ){
           for ( let p of paths ){
-            geo = p.asGeoJSON( graph );
-
+            geo       = p.asGeoJSON( graph );
+            flatArys  = geoProjFlatten( geo );
+            for ( fa of flatArys ) canvas.drawGraphicPolygon( fa, 0x00ff00 );
+            /*
             for ( coord of geo.coordinates[ 0 ] ){
               pnt = projection( coord );
               //console.log( "PNT", coord, pnt );
               canvas.drawGraphicCircle( pnt[0], pnt[1], 5 );
             }
+            */
+
           }
         }
       }
@@ -182,6 +185,34 @@ export function svgRapidFeaturesPixi( projection, context, dispatch ){
 
   }
 
+  /** Take a Geo Object, Project Polygon Geo coord to Pixel Coords while saving the results in an array of flat arrays */
+  function geoProjFlatten( geo ){
+    const flatArys  = new Array( geo.coordinates.length ); // PreAllocate Array
+    let j, i, ii, pnts, eIdx, flat, p;
+
+    for( [ j, pnts ] of geo.coordinates.entries() ){
+      eIdx = pnts.length - 1; // Get Final Index
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      // Exclude Final Point if its a repeat of the first Point
+      if ( pnts[0][0] === pnts[ eIdx ][0] &&
+           pnts[0][1] === pnts[ eIdx ][1] ) eIdx--;
+
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      ii   = 0;                           // Reset Allocator Index
+      flat = new Array( (eIdx+1) * 2 );   // Preallocate Flat Array, 2 Numbers Per Coordinate Point
+
+      for ( i=0; i <= eIdx; i++ ){
+        p            = projection( pnts[ i ] ); // Convert Geo Coords to Pixel Coords
+        flat[ ii++ ] = p[ 0 ];                  // Save results to flat array
+        flat[ ii++ ] = p[ 1 ];
+      }
+
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      flatArys[ j ] = flat;
+    }
+
+    return flatArys;
+  }
 
   function eachDataset(dataset, i, nodes) {
     const rapidContext = context.rapidContext();

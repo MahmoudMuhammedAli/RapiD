@@ -168,7 +168,7 @@ export function svgRapidFeaturesPixi( projection, context, dispatch ){
           for ( let p of paths ){
             geo       = p.asGeoJSON( graph );
             flatArys  = geoProjFlatten( geo );
-            for ( fa of flatArys ) canvas.drawGraphicPolygon( fa, 0x00ff00 );
+            for ( fa of flatArys ) canvas.drawGraphicPolygon( fa );
             /*
             for ( coord of geo.coordinates[ 0 ] ){
               pnt = projection( coord );

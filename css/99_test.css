@@ -1,0 +1,23 @@
+/* STRIPE PATTERN */
+.ai-layer-gl{
+    --line-color        : #00ff00;
+    --line-angle        : 22;
+    --line-thickness    : 1.5;
+    --line-spacing      : 5;
+    --use-grid-pattern  : 0;
+    --stroke-color      : #00ffff;
+    --stroke-thickness  : 2;
+}
+
+
+/* GRID PATTERN 
+.ai-layer-gl{
+    --line-color        : #00ff00;
+    --line-angle        : 0;
+    --line-thickness    : 1.5;
+    --line-spacing      : 10;
+    --use-grid-pattern  : 1;
+    --stroke-color      : #00ffff;
+    --stroke-thickness  : 2;
+}
+*/

@@ -1,6 +1,23 @@
 import BaseLayer    from './BaseLayer.js';
 import * as PIXI    from 'pixi.js';
 
+function getStyleColor( style, sname, defaultValue ){
+    const val = style.getPropertyValue( sname );
+    return ( val !== '' )?
+        parseInt( val.replace( '#', '0x' ), 16 ) :
+        defaultValue;
+}
+
+function getStyleFloat( style, sname, defaultValue ){
+    const val = style.getPropertyValue( sname );
+    return ( val !== '' )? parseFloat( val ) : defaultValue;
+}
+
+function getStyleString( style, sname, defaultValue ){
+    const val = style.getPropertyValue( sname );
+    return ( val !== '' )? val.replaceAll( '"', '' ).trim() : defaultValue;
+}
+
 class PixiLayer extends BaseLayer{
     initDom( root ){
         this.app = new PIXI.Application( {
@@ -14,28 +31,37 @@ class PixiLayer extends BaseLayer{
         root.appendChild( this.app.view );
 
         //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // Tweak Canvas Styles, Temporary
+        // Add Style Class to Canvas
         let c = this.app.view;
-        c.classList.add( 'ai-layer-gl' );
-        c.style.position        = 'absolute';   // TODO : Make this a CSS Class
-        c.style.top             = '0px';
-        c.style.left            = '0px';
+        c.classList.add( 'layer-container' );   // Basic Style for Layer
+        c.classList.add( 'ai-layer-gl' );       // Drawing Styles
 
         //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         // Pull Style Information that can be used by the shader to render the Graphics
-        const style      = window.getComputedStyle( c, null );                                            // Get Style of Canvas
-        this.customStyle = {
-            useGridPattern  : parseInt( style.getPropertyValue( '--use-grid-pattern' ), 10 ),
+        const style = window.getComputedStyle( c, null );
+        this.styles = {
+            point : {
+                strokeColor     : getStyleColor( style, '--point-stroke-color', 0x00ff00 ),
+                strokeSize      : getStyleFloat( style, '--point-stroke-size', 5 ),
+                color           : getStyleColor( style, '--point-color', 0x00ff00 ),
+                radius          : getStyleFloat( style, '--point-radius', 10 ),
+            },
 
-            lineColor       : parseInt( style.getPropertyValue( '--line-color' ).replace( '#', '0x' ), 16 ),
-            lineAngle       : parseFloat( style.getPropertyValue( '--line-angle' ) ),
-            lineThickness   : parseFloat( style.getPropertyValue( '--line-thickness' ) ),
-            lineSpacing     : parseFloat( style.getPropertyValue( '--line-spacing' ) ),
+            line : {
+                color           : getStyleColor( style, '--line-color', 0x00ff00 ),
+                size            : getStyleFloat( style, '--line-size', 5 ),
+            },
 
-            strokeColor     : parseInt( style.getPropertyValue( '--stroke-color' ).replace( '#', '0x' ), 16 ),
-            strokeThickness : parseFloat( style.getPropertyValue( '--stroke-thickness' ) ),
+            polygon : {
+                strokeColor     : getStyleColor(  style, '--polygon-stroke-color', 0x00ff00 ),
+                strokeSize      : getStyleFloat(  style, '--polygon-stroke-size', 5 ),
+                fillType        : getStyleString( style, '--polygon-fill-type', 'stripes' ),
+                fillColorA      : getStyleColor(  style, '--polygon-fill-color-a', 0x00ff00 ),
+                fillAngle       : getStyleFloat(  style, '--polygon-fill-angle', 0 ),
+                fillLineSpacing : getStyleFloat(  style, '--polygon-fill-line-spacing', 0 ),
+                fillLineSize    : getStyleFloat(  style, '--polygon-fill-line-size', 2 ),
+            },
         };
-
 
         //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         // For Quick Prototyping, Going to use the Graphic Object
@@ -43,20 +69,19 @@ class PixiLayer extends BaseLayer{
         // figure out a better way to manage drawing entities, things like
         // update polygon vertices without needed to run earcut on them again.
         // But right now we're going to clear and redraw everything for each frame.
-
         this.patternShader  = diagonalFillPattern();
 
-        this.patternShader.uniforms.angle       = this.customStyle.lineAngle;
-        this.patternShader.uniforms.thinkness   = this.customStyle.lineThickness;
-        this.patternShader.uniforms.spacing     = this.customStyle.lineSpacing;
-        this.patternShader.uniforms.useGrid     = this.customStyle.useGridPattern;
+        this.patternShader.uniforms.angle       = this.styles.polygon.fillAngle;
+        this.patternShader.uniforms.thinkness   = this.styles.polygon.fillLineSize;
+        this.patternShader.uniforms.spacing     = this.styles.polygon.fillLineSpacing;
+        this.patternShader.uniforms.useGrid     = ( this.styles.polygon.fillType === 'stripes' )? 0 : 1;
 
         this.graphic        = new PIXI.Graphics();
         this.graphic.shader = this.patternShader;
 
         this.app.stage.addChild( this.graphic );
 
-        this.isReady            = true;
+        this.isReady        = true;
     }
 
     setSize( size ){
@@ -72,16 +97,25 @@ class PixiLayer extends BaseLayer{
     //#region GRAPHIC METHODS
     clearGraphic(){ this.graphic.clear();   return this; }
 
-    drawGraphicPolygon( flat2DAry, color=this.customStyle.lineColor, lnStyle=this.customStyle.strokeThickness ){
+    drawGraphicPolygon( flat2DAry, color=this.styles.polygon.fillColorA, strokeSize=this.styles.polygon.strokeSize ){
         //this.graphic.lineStyle( 0 );
-        this.graphic.lineStyle( lnStyle, this.customStyle.strokeColor, 1 );
+        this.graphic.lineStyle( strokeSize, this.styles.polygon.strokeColor, 1 );
         this.graphic.beginFill( color, 0.9 );
         this.graphic.drawPolygon( flat2DAry );
         this.graphic.endFill();
         return this;
     }
 
-    drawGraphicCircle( x, y, radius, color=0x00ff00 ){
+    drawGraphicPath( flat2DAry, color=this.styles.line.color, lineSize=this.styles.line.size ){
+        this.graphic.lineStyle( lineSize, color, 1 );
+        this.graphic.moveTo( flat2DAry[ 0 ], flat2DAry[ 1 ] );
+        for ( let i=2; i < flat2DAry.length; i+=2 ){
+            this.graphic.lineTo( flat2DAry[ i ], flat2DAry[ i+1 ] );
+        }
+    }
+
+    drawGraphicCircle( x, y, radius=this.styles.point.radius, color=this.styles.point.color, strokeSize=this.styles.point.strokeSize, strokeColor=this.styles.point.strokeColor ){
+        this.graphic.lineStyle( strokeSize, strokeColor, 1 );
         this.graphic.beginFill( color, 1 );
         this.graphic.drawCircle( x, y, radius );
         this.graphic.endFill();

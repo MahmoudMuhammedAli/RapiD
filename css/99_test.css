@@ -1,23 +1,23 @@
-/* STRIPE PATTERN */
 .ai-layer-gl{
-    --line-color        : #00ff00;
-    --line-angle        : 22;
-    --line-thickness    : 1.5;
-    --line-spacing      : 5;
-    --use-grid-pattern  : 0;
-    --stroke-color      : #00ffff;
-    --stroke-thickness  : 2;
+    --polygon-stroke-color      : #00ffff;
+    --polygon-stroke-size       : 2;
+    --polygon-fill-type         : 'stripes'; /* stripes, grid */ 
+    --polygon-fill-color-a      : #00ff00;
+    --polygon-fill-line-spacing : 5;
+    --polygon-fill-line-size    : 1.5;
+    --polygon-fill-angle        : 22; /* Rotation in Degrees */
+
+    --point-color               : #ff0000;
+    --point-radius              : 5;
+    --point-stroke-color        : #00ffff;
+    --point-stroke-size         : 4;
+
+    --line-color                : #00ffff;
+    --line-size                 : 4;
 }
 
-
-/* GRID PATTERN 
-.ai-layer-gl{
-    --line-color        : #00ff00;
-    --line-angle        : 0;
-    --line-thickness    : 1.5;
-    --line-spacing      : 10;
-    --use-grid-pattern  : 1;
-    --stroke-color      : #00ffff;
-    --stroke-thickness  : 2;
+.layer-container{
+    position    : absolute;
+    top         : 0px;
+    left        : 0px;
 }
-*/

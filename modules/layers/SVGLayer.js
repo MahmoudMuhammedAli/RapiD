@@ -29,17 +29,12 @@ class SVGLayer extends BaseLayer{
         const g   = newElm( 'g',      'data-layer ' + this.id, svg );
 
         //---------------------------
-        // TODO CSS this, Only doing it this way for Testing why layers aren't appearing, Making it float helps it finally take its w/h
-        svg.style.position  = 'absolute';
-        svg.style.top       = '0px';
-        svg.style.left      = '0px';
+        svg.classList.add( 'layer-container' );
 
         //---------------------------
         this.svgGroup = d3_select( g );    // Layer Functions Expect G Wrapped in a D3 Selection
         this.svg      = d3_select( svg );  // drawLayers.dimensions expect SVG Wrapped in D3 Selection
         this.isReady  = true;
-
-        console.log( 'Build SVG Layer' );
     }
 }
 

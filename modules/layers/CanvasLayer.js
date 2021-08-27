@@ -15,9 +15,7 @@ class CanvasLayer extends BaseLayer{
         this.width              = 0;
         this.height             = 0;
 
-        c.style.position        = 'absolute';   // TODO : Make this a CSS Class
-        c.style.top             = '0px';
-        c.style.left            = '0px';
+        c.classList.add( 'layer-container' );
         c.style.imageRendering  = 'pixelated';  // For Hi Res Screens, make things pixelated instead of blurry
 
         this.isReady            = true;

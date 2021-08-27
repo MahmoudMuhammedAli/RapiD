@@ -132,105 +132,54 @@ export function svgRapidFeaturesPixi( projection, context, dispatch ){
   }
 
 
-  function render( canvas ){
-    // TODO: Hacking together how eachDataset works into this function to learn what the data looks like
-    // and see if there is any fat to trim thats only needed for SVG related operations
+  function render( layer ){
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Checks if Ready to Handle Rendering
+    if ( !layer.isReady ) return;
 
-    const rapidContext  = context.rapidContext();
-    const rapidDatasets = rapidContext.datasets();
-    const datasets = Object.values(rapidDatasets)
-      .filter(dataset => dataset.added && dataset.enabled);
-
-    const dItem   = datasets[ 1 ];
-    const service = dItem.service === 'fbml' ? getFbMlService(): getEsriService();
-    if (!service) return;
-  
-    // Adjust the dataset id for whether we want the data conflated or not.
-    const internalID = dItem.id + (dItem.conflated ? '-conflated' : '');
-    const graph = service.graph(internalID);
+    const rapidContext          = context.rapidContext();
+    const waitingForTaskExtent  = gpxInUrl && !rapidContext.getTaskExtent();
+    if ( waitingForTaskExtent ) return;  // not ready to draw yet, starting up
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    canvas.clearGraphic();
+    // Gather available Datasets
+    const rapidDatasets = rapidContext.datasets();
+    const datasets      = Object.values( rapidDatasets )
+      .filter( dataset => dataset.added && dataset.enabled );
 
-    if ( context.map().zoom() >= context.minEditableZoom() ){
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Render Data
+    let ds, geoData;
 
-      if (dItem.service === 'fbml') {
-
-        service.loadTiles( internalID, projection, rapidContext.getTaskExtent() );
-        let pathData = service
-          .intersects( internalID, context.map().extent() )
-          .filter( d => d.type === 'way' && !_actioned.has(d.id) && !_actioned.has(d.__origid__) )  // see onHistoryRestore()
-          ;//.filter( getPath ); 
-
-        let paths = pathData.filter( isArea );
-        let pnt, coord, geo, flatArys, fa;
-        if( paths.length > 0 ){
-          for ( let p of paths ){
-            geo       = p.asGeoJSON( graph );
-            flatArys  = geoProjFlatten( geo );
-            for ( fa of flatArys ) canvas.drawGraphicPolygon( fa );
-            /*
-            for ( coord of geo.coordinates[ 0 ] ){
-              pnt = projection( coord );
-              //console.log( "PNT", coord, pnt );
-              canvas.drawGraphicCircle( pnt[0], pnt[1], 5 );
-            }
-            */
-
-          }
-        }
-      }
-
-    }//else
-
-  }
-
-  /** Take a Geo Object, Project Polygon Geo coord to Pixel Coords while saving the results in an array of flat arrays */
-  function geoProjFlatten( geo ){
-    const flatArys  = new Array( geo.coordinates.length ); // PreAllocate Array
-    let j, i, ii, pnts, eIdx, flat, p;
-
-    for( [ j, pnts ] of geo.coordinates.entries() ){
-      eIdx = pnts.length - 1; // Get Final Index
-      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-      // Exclude Final Point if its a repeat of the first Point
-      if ( pnts[0][0] === pnts[ eIdx ][0] &&
-           pnts[0][1] === pnts[ eIdx ][1] ) eIdx--;
-
-      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-      ii   = 0;                           // Reset Allocator Index
-      flat = new Array( (eIdx+1) * 2 );   // Preallocate Flat Array, 2 Numbers Per Coordinate Point
-
-      for ( i=0; i <= eIdx; i++ ){
-        p            = projection( pnts[ i ] ); // Convert Geo Coords to Pixel Coords
-        flat[ ii++ ] = p[ 0 ];                  // Save results to flat array
-        flat[ ii++ ] = p[ 1 ];
-      }
-
-      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-      flatArys[ j ] = flat;
+    layer.clearGraphic();
+    for( ds of datasets ){
+      geoData = eachDataset( ds );
+      if ( geoData?.paths?.length )     drawGeo( layer, geoData.paths, geoData.graph );
+      if ( geoData?.vertices?.length )  drawGeo( layer, geoData.vertices, geoData.graph );
+      if ( geoData?.points?.length )    drawPoints( layer, geoData.points );
     }
-
-    return flatArys;
   }
 
-  function eachDataset(dataset, i, nodes) {
+
+  // Call webservices to get 
+  function eachDataset( dataset ){ //, i, nodes
     const rapidContext = context.rapidContext();
-    const selection = d3_select(nodes[i]);
+    //const selection = d3_select(nodes[i]);
     const service = dataset.service === 'fbml' ? getFbMlService(): getEsriService();
     if (!service) return;
 
     // Adjust the dataset id for whether we want the data conflated or not.
-    const internalID = dataset.id + (dataset.conflated ? '-conflated' : '');
-    const graph = service.graph(internalID);
-    const getPath = svgPath(projection, graph);
-    const getTransform = svgPointTransform(projection);
+    const internalID    = dataset.id + (dataset.conflated ? '-conflated' : '');
+    const graph         = service.graph( internalID );
+    const getPath       = svgPath( projection, graph );
+    //const getTransform  = svgPointTransform( projection );
 
     // Gather data
     let geoData = {
-      paths: [],
-      vertices: [],
-      points: []
+      graph     : graph,
+      paths     : [],
+      vertices  : [],
+      points    : []
     };
 
     if (context.map().zoom() >= context.minEditableZoom()) {
@@ -287,163 +236,92 @@ export function svgRapidFeaturesPixi( projection, context, dispatch ){
       }
     }
 
-    selection
-      .call(drawPaths, geoData.paths, dataset, getPath)
-      .call(drawVertices, geoData.vertices, getTransform)
-      .call(drawPoints, geoData.points, getTransform);
+    //selection
+    //  .call(drawPaths, geoData.paths, dataset, getPath)
+    //  .call(drawVertices, geoData.vertices, getTransform)
+    //  .call(drawPoints, geoData.points, getTransform);
+    return geoData;
   }
 
+  //#region DRAWING RELATED
 
-  function drawPaths(selection, pathData, dataset, getPath) {
-    // Draw shadow, casing, stroke layers
-    let linegroups = selection
-      .selectAll('g.linegroup')
-      .data(['shadow', 'casing', 'stroke']);
+  /** Take a Geo Object, Project Polygon Geo coord to Pixel Coords while saving the results in an array of flat arrays */
+  function geoProjFlatten( geo ){
+    const flatArys  = new Array( geo.coordinates.length ); // PreAllocate Array
+    let j, i, ii, pnts, eIdx, flat, p;
 
-    linegroups = linegroups.enter()
-      .append('g')
-      .attr('class', d => `linegroup linegroup-${d}`)
-      .merge(linegroups);
+    for ( [ j, pnts ] of geo.coordinates.entries() ){
+      eIdx = pnts.length - 1; // Get Final Index
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      // Exclude Final Point if its a repeat of the first Point
+      if ( pnts[0][0] === pnts[ eIdx ][0] &&
+            pnts[0][1] === pnts[ eIdx ][1] ) eIdx--;
 
-    // Draw paths
-    let paths = linegroups
-      .selectAll('path')
-      .data(pathData, featureKey);
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      ii   = 0;                           // Reset Allocator Index
+      flat = new Array( (eIdx+1) * 2 );   // Preallocate Flat Array, 2 Numbers Per Coordinate Point
 
-    // exit
-    paths.exit()
-      .remove();
+      for ( i=0; i <= eIdx; i++ ){
+        p            = projection( pnts[ i ] ); // Convert Geo Coords to Pixel Coords
+        flat[ ii++ ] = p[ 0 ];                  // Save results to flat array
+        flat[ ii++ ] = p[ 1 ];
+      }
 
-    // enter/update
-    paths = paths.enter()
-      .append('path')
-      .attr('style', d => isArea(d) ? `fill: url(#fill-${dataset.id})` : null)
-      .attr('class', (d, i, nodes) => {
-        const currNode = nodes[i];
-        const linegroup = currNode.parentNode.__data__;
-        const klass = isArea(d) ? 'building' : 'road';
-        return `line ${linegroup} ${klass} data${d.__fbid__}`;
-      })
-      .merge(paths)
-      .attr('d', getPath);
+      //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      flatArys[ j ] = flat;
+    }
+
+    return flatArys;
   }
 
+  /** Draw Polygon, LineString and Point */
+  function drawGeo( layer, pathData, graph ){
+    let geo, ary, itm, i, pnt;
+      for ( let p of pathData ){
+        geo = p.asGeoJSON( graph );
+        switch ( geo.type ){
+          //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          case 'Polygon' :
+            // **NOTES**
+            // coord = [ [ [x,y],[x,y],[x,y] ], [ [x,y],[x,y],[x,y] ]  ]
+            // First and Last Points Tend to Match, Need to remove final point if matches for Pixi Rendering
+            ary = geoProjFlatten( geo );
+            for ( itm of ary ) layer.drawGraphicPolygon( itm );
+          break;
 
-  function drawVertices(selection, vertexData, getTransform) {
-    const vertRadii = {
-      //       z16-, z17,  z18+
-      stroke: [3.5,  4,    4.5],
-      fill:   [2,    2,    2.5]
-    };
+          //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          case 'LineString' :
+            // **NOTES**
+            // coords = [ [x,y], [x,y] ]
+            i   = 0;  
+            ary = new Array( geo.coordinates.length * 2 );
+            for( itm of geo.coordinates ){
+              pnt        = projection( itm );
+              ary[ i++ ] = pnt[ 0 ];
+              ary[ i++ ] = pnt[ 1 ];
+            }
+            layer.drawGraphicPath( ary );
+          break;
 
-    let vertexGroup = selection
-      .selectAll('g.vertexgroup')
-      .data(vertexData.length ? [0] : []);
+          //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          case 'Point' :
+            // **NOTES**
+            // coords = [ x, y ]
+            pnt = projection( geo.coordinates );
+            layer.drawGraphicCircle( pnt[0], pnt[1] );
+          break;
 
-    vertexGroup.exit()
-      .remove();
-
-    vertexGroup = vertexGroup.enter()
-      .append('g')
-      .attr('class', 'vertexgroup')
-      .merge(vertexGroup);
-
-
-    let vertices = vertexGroup
-      .selectAll('g.vertex')
-      .data(vertexData, d => d.id);
-
-    // exit
-    vertices.exit()
-      .remove();
-
-    // enter
-    let enter = vertices.enter()
-      .append('g')
-      .attr('class', d => `node vertex ${d.id}`);
-
-    enter
-      .append('circle')
-      .attr('class', 'stroke');
-
-    enter
-      .append('circle')
-      .attr('class', 'fill');
-
-    // update
-    const zoom = geoScaleToZoom(projection.scale());
-    const radiusIdx = (zoom < 17 ? 0 : zoom < 18 ? 1 : 2);
-    vertices = vertices
-      .merge(enter)
-      .attr('transform', getTransform)
-      .call(selection => {
-        ['stroke', 'fill'].forEach(klass => {
-          selection.selectAll('.' + klass)
-            .attr('r', vertRadii[klass][radiusIdx]);
-        });
-      });
+          //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          default : console.error( 'Unknown Geo Type : ', geo.type ); break;
+        }
+      }
   }
 
-
-  function drawPoints(selection, pointData, getTransform) {
-    const pointRadii = {
-      //       z16-, z17,  z18+
-      shadow: [4.5,   7,   8],
-      stroke: [4.5,   7,   8],
-      fill:   [2.5,   4,   5]
-    };
-
-    let pointGroup = selection
-      .selectAll('g.pointgroup')
-      .data(pointData.length ? [0] : []);
-
-    pointGroup.exit()
-      .remove();
-
-    pointGroup = pointGroup.enter()
-      .append('g')
-      .attr('class', 'pointgroup')
-      .merge(pointGroup);
-
-    let points = pointGroup
-      .selectAll('g.point')
-      .data(pointData, featureKey);
-
-    // exit
-    points.exit()
-      .remove();
-
-    // enter
-    let enter = points.enter()
-      .append('g')
-      .attr('class', d => `node point data${d.__fbid__}`);
-
-    enter
-      .append('circle')
-      .attr('class', 'shadow');
-
-    enter
-      .append('circle')
-      .attr('class', 'stroke');
-
-    enter
-      .append('circle')
-      .attr('class', 'fill');
-
-    // update
-    const zoom = geoScaleToZoom(projection.scale());
-    const radiusIdx = (zoom < 17 ? 0 : zoom < 18 ? 1 : 2);
-    points = points
-      .merge(enter)
-      .attr('transform', getTransform)
-      .call(selection => {
-        ['shadow', 'stroke', 'fill'].forEach(klass => {
-          selection.selectAll('.' + klass)
-            .attr('r', pointRadii[klass][radiusIdx]);
-        });
-      });
+  function drawPoints( layer, pointData ){
+    console.log( 'DRAW POINTS', pointData  );
   }
 
+  // #endregion
 
   render.showAll = function() {
     return _enabled;

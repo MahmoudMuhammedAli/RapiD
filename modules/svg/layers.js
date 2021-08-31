@@ -33,27 +33,25 @@ export function svgLayers(projection, context) {
 
     //===============================================================================
     var _layers     = [
-        new SVGLayer( 'ai-features',        svgRapidFeatures( projection, context, dispatch ) ),
-        //new CanvasLayer( 'ai-features-cv',  svgRapidFeaturesCanvas( projection, context, dispatch ) ),
-        new PixiLayer( 'ai-features-px',    svgRapidFeaturesPixi( projection, context, dispatch ) ),
-        //new SVGLayer( 'osm',                svgOsm( projection, context, dispatch ) ),
+        new SVGLayer( 'ai-features',            svgRapidFeatures( projection, context, dispatch ) ),
+        //new CanvasLayer( 'ai-features-cv',      svgRapidFeaturesCanvas( projection, context, dispatch ) ),
+        new PixiLayer( 'ai-features-px',        svgRapidFeaturesPixi( projection, context, dispatch ) ),
         /*
-        { id: 'ai-features', layer: svgRapidFeatures(projection, context, dispatch) },
-        { id: 'osm', layer: svgOsm(projection, context, dispatch) },
-        { id: 'notes', layer: svgNotes(projection, context, dispatch) },
-        { id: 'data', layer: svgData(projection, context, dispatch) },
-        { id: 'keepRight', layer: svgKeepRight(projection, context, dispatch) },
-        { id: 'improveOSM', layer: svgImproveOSM(projection, context, dispatch) },
-        { id: 'osmose', layer: svgOsmose(projection, context, dispatch) },
-        { id: 'streetside', layer: svgStreetside(projection, context, dispatch)},
-        { id: 'mapillary', layer: svgMapillaryImages(projection, context, dispatch) },
-        { id: 'mapillary-position', layer: svgMapillaryPosition(projection, context, dispatch) },
-        { id: 'mapillary-map-features',  layer: svgMapillaryMapFeatures(projection, context, dispatch) },
-        { id: 'mapillary-signs',  layer: svgMapillarySigns(projection, context, dispatch) },
-        { id: 'openstreetcam', layer: svgOpenstreetcamImages(projection, context, dispatch) },
-        { id: 'debug', layer: svgDebug(projection, context, dispatch) },
-        { id: 'geolocate', layer: svgGeolocate(projection, context, dispatch) },
-        { id: 'touch', layer: svgTouch(projection, context, dispatch) }
+        new SVGLayer( 'osm',                    svgOsm( projection, context, dispatch ) ),
+        new SVGLayer( 'notes',                  svgNotes( projection, context, dispatch) ),
+        new SVGLayer( 'data',                   svgData( projection, context, dispatch) ),
+        new SVGLayer( 'keepRight',              svgKeepRight( projection, context, dispatch) ),
+        new SVGLayer( 'improveOSM',             svgImproveOSM( projection, context, dispatch) ),
+        new SVGLayer( 'osmose',                 svgOsmose( projection, context, dispatch) ),
+        new SVGLayer( 'streetside',             svgStreetside( projection, context, dispatch) ),
+        new SVGLayer( 'mapillary',              svgMapillaryImages( projection, context, dispatch) ),
+        new SVGLayer( 'mapillary-position',     svgMapillaryPosition( projection, context, dispatch) ),
+        new SVGLayer( 'mapillary-map-features', svgMapillaryMapFeatures( projection, context, dispatch) ),
+        new SVGLayer( 'mapillary-signs',        svgMapillarySigns( projection, context, dispatch) ),
+        new SVGLayer( 'openstreetcam',          svgOpenstreetcamImages( projection, context, dispatch) ),
+        new SVGLayer( 'debug',                  svgDebug( projection, context, dispatch) ),
+        new SVGLayer( 'geolocate',              svgGeolocate( projection, context, dispatch) ),
+        new SVGLayer( 'touch',                  svgTouch( projection, context, dispatch) ),
         */
     ];
 
@@ -169,18 +167,10 @@ export function svgLayers(projection, context) {
 
 
     drawLayers.dimensions = function(val) {
-        //console.log( 'SET DIMENSIONS', val, svg );
-        /*
-        if (!arguments.length) return utilGetDimensions(svg);
-        utilSetDimensions( svg, val );
-
-        //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        */
         if ( !arguments.length ) return utilGetDimensions( _layers[0].svg ); // TODO: This line is BAD, Figure out a better way to get Size
+        
         for ( const l of _layers ){
-            if ( !l.isReady ) continue;
-            //utilSetDimensions( l.svg, val );
-            l.setSize( val );
+            if ( l.isReady ) l.setSize( val );
         }
 
         return this;

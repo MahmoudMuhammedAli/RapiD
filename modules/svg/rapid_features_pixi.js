@@ -1,11 +1,12 @@
-import _throttle from 'lodash-es/throttle';
-
-import { select as d3_select} from 'd3-selection';
-import { geoScaleToZoom } from '@id-sdk/geo';
-import { services } from '../services';
+//#region IMPORT & GLOBAL VARIABLES
+import _throttle                      from 'lodash-es/throttle';
+import { select as d3_select}         from 'd3-selection';
+import { geoScaleToZoom }             from '@id-sdk/geo';
+import { services }                   from '../services';
 import { svgPath, svgPointTransform } from './index';
-import { utilStringQs } from '../util';
-import { GraphDataProvider } from 'mapillary-js';
+import { utilStringQs }               from '../util';
+import { GraphDataProvider }          from 'mapillary-js';
+import * as PIXI                      from 'pixi.js';
 
 let _enabled = false;
 let _initialized = false;
@@ -13,11 +14,126 @@ let _FbMlService;
 let _EsriService;
 let _actioned;
 
+//#endregion //////////////////////////////////////////////////////////////////////
+
+
+//#region FILL PATTERN SHADER
+
+function fillPatternShader(){
+  const VERT_SRC = `
+precision highp float;
+attribute vec2  aVertexPosition;
+attribute vec2  aTextureCoord;
+attribute vec4  aColor;
+attribute float aTextureId;
+
+uniform mat3    projectionMatrix;
+uniform mat3    translationMatrix;
+uniform vec4    tint;           // Required, Graphic Will Fail Rendering if this is missing.
+
+varying vec2    vTextureCoord;
+varying vec4    vColor;
+varying float   vTextureId;
+
+void main(void){
+  gl_Position     = vec4(( projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0) ).xy, 0.0, 1.0);
+  vTextureCoord   = aTextureCoord;
+  vTextureId      = aTextureId;
+  vColor          = aColor * tint;
+}
+`;
+
+const FRAG_SRC = `
+varying vec2  vTextureCoord;
+varying vec4  vColor;
+varying float vTextureId;
+
+uniform vec2  resolution;
+uniform float angle;        // TODO: Better to pass in Mat2 Rotation from CPU, then to compute it for each pixel.
+uniform float thinkness;
+uniform float spacing;
+uniform int   useGrid;
+
+vec2 rotateCoord( vec2 uv, float rads ){
+  uv *= mat2( cos(rads), sin(rads), -sin(rads), cos(rads) );
+return uv;
+}
+
+vec2 grid( vec2 fragCoord, float space, float gridWidth ){
+  vec2 p    = fragCoord - 0.5;
+  vec2 size = vec2( gridWidth - 0.5 );
+  
+  vec2 a1 = mod( p - size, space );
+  vec2 a2 = mod( p + size, space );
+  vec2 a  = a2 - a1;
+     
+  //float g = min( a.x, a.y );
+  //return clamp( g, 0.0, 1.0 );
+  return a;
+}
+
+void main(void){
+  if( vColor.a > 0.999 ) gl_FragColor = vColor;
+  else{
+      //vec2 uv         = gl_FragCoord.xy / resolution;
+      //float interval  = 10.0;
+      //float a         = step( mod( gl_FragCoord.x + gl_FragCoord.y, interval ) / ( interval - 1.0 ), 0.3 );
+      //gl_FragColor    = vec4( a * vColor.rgb, a );
+
+      vec2  fragCoord = vec2( gl_FragCoord.x, resolution.y - gl_FragCoord.y ); // Flip Y Coordnate so origin is Upper Left 
+      vec2  grad      =  grid( rotateCoord( fragCoord, radians( angle ) ), spacing, thinkness );
+      float a         = ( useGrid == 1 )? clamp( min( grad.x, grad.y ), 0.0, 1.0 ) : grad.y;
+      a = 1.0 - a;
+
+      gl_FragColor    = vec4( a * vColor.rgb, a );
+
+  }
+}
+`;
+  // TODO: Need set the Canvas Width/Height.
+  // TODO: See if UBOs are possible with Pixy, so one place to update the resolution for all the shaders to use.
+  return PIXI.Shader.from( VERT_SRC, FRAG_SRC, { 
+      tint        : [0,0,0,0],
+      resolution  : [ window.innerWidth, window.innerHeight ],
+      angle       : 45,
+      thinkness   : 1.1,
+      spacing     : 7,
+      useGrid     : 1,
+  });
+}
+
+//#endregion //////////////////////////////////////////////////////////////////////
+
+
+//#region GET STYLE FUNCTIONS
+
+function getStyleColor( style, sname, defaultValue ){
+  const val = style.getPropertyValue( sname );
+  return ( val !== '' )?
+      parseInt( val.replace( '#', '0x' ), 16 ) :
+      defaultValue;
+}
+
+function getStyleFloat( style, sname, defaultValue ){
+  const val = style.getPropertyValue( sname );
+  return ( val !== '' )? parseFloat( val ) : defaultValue;
+}
+
+function getStyleString( style, sname, defaultValue ){
+  const val = style.getPropertyValue( sname );
+  return ( val !== '' )? val.replaceAll( '"', '' ).trim() : defaultValue;
+}
+
+//#endregion //////////////////////////////////////////////////////////////////////
+
+
 export function svgRapidFeaturesPixi( projection, context, dispatch ){
   const RAPID_MAGENTA   = '#da26d3';
   const throttledRedraw = _throttle(() => dispatch.call('change'), 1000);
   const gpxInUrl        = utilStringQs(window.location.hash).gpx;
   let _layer            = d3_select(null);
+
+  let styles            = null;
 
   function init() {
     if (_initialized) return;  // run once
@@ -132,10 +248,63 @@ export function svgRapidFeaturesPixi( projection, context, dispatch ){
   }
 
 
+  function loadStyles( layer ){
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // GRAB STYLE SHEET INFORMATION FROM DOM ELEMENT OF THE LAYER
+
+    const s = layer.computeStyle();
+
+    styles = {
+      vertices : {
+          strokeColor     : getStyleColor( s, '--vertices-stroke-color', 0x00ff00 ),
+          strokeSize      : getStyleFloat( s, '--vertices-stroke-size', 5 ),
+          color           : getStyleColor( s, '--vertices-color', 0x00ff00 ),
+          radius          : getStyleFloat( s, '--vertices-radius', 10 ),
+      },
+
+      point : {
+          strokeColor     : getStyleColor( s, '--point-stroke-color', 0x00ff00 ),
+          strokeSize      : getStyleFloat( s, '--point-stroke-size', 5 ),
+          colorIn         : getStyleColor( s, '--point-color-in', 0x00ff00 ),
+          colorOut        : getStyleColor( s, '--point-color-out', 0x00ff00 ),
+          radiusIn        : getStyleFloat( s, '--point-radius-in', 5 ),
+          radiusOut       : getStyleFloat( s, '--point-radius-out', 8 ),
+      },
+
+      line : {
+          color           : getStyleColor( s, '--line-color', 0x00ff00 ),
+          size            : getStyleFloat( s, '--line-size', 5 ),
+      },
+
+      polygon : {
+          strokeColor     : getStyleColor(  s, '--polygon-stroke-color', 0x00ff00 ),
+          strokeSize      : getStyleFloat(  s, '--polygon-stroke-size', 5 ),
+          fillType        : getStyleString( s, '--polygon-fill-type', 'stripes' ),
+          fillColorA      : getStyleColor(  s, '--polygon-fill-color-a', 0x00ff00 ),
+          fillAngle       : getStyleFloat(  s, '--polygon-fill-angle', 0 ),
+          fillLineSpacing : getStyleFloat(  s, '--polygon-fill-line-spacing', 0 ),
+          fillLineSize    : getStyleFloat(  s, '--polygon-fill-line-size', 2 ),
+      },
+    };
+
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // LOAD UP A FILL PATTERN SHADER TO USE FOR RENDERING POLYGONS
+    const fillShader = fillPatternShader();
+    fillShader.uniforms.angle       = styles.polygon.fillAngle;
+    fillShader.uniforms.thinkness   = styles.polygon.fillLineSize;
+    fillShader.uniforms.spacing     = styles.polygon.fillLineSpacing;
+    fillShader.uniforms.useGrid     = ( styles.polygon.fillType === 'stripes' )? 0 : 1;
+
+    layer.graphic.shader            = fillShader;
+  }
+
+
   function render( layer ){
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Checks if Ready to Handle Rendering
+
     if ( !layer.isReady ) return;
+    if( !styles )         loadStyles( layer );  // Once layer is ready. Start grabbing custom style values.
 
     const rapidContext          = context.rapidContext();
     const waitingForTaskExtent  = gpxInUrl && !rapidContext.getTaskExtent();
@@ -154,14 +323,13 @@ export function svgRapidFeaturesPixi( projection, context, dispatch ){
     layer.clearGraphic();
     for( ds of datasets ){
       geoData = eachDataset( ds );
-      if ( geoData?.paths?.length )     drawGeo( layer, geoData.paths, geoData.graph );
-      if ( geoData?.vertices?.length )  drawGeo( layer, geoData.vertices, geoData.graph );
-      if ( geoData?.points?.length )    drawPoints( layer, geoData.points );
+      if ( geoData?.paths?.length )     drawPaths( layer, geoData.paths, geoData.graph );
+      if ( geoData?.vertices?.length )  drawVertices( layer, geoData.vertices, geoData.graph );
+      if ( geoData?.points?.length )    drawPoints( layer, geoData.points, geoData.graph );
     }
   }
 
 
-  // Call webservices to get 
   function eachDataset( dataset ){ //, i, nodes
     const rapidContext = context.rapidContext();
     //const selection = d3_select(nodes[i]);
@@ -243,7 +411,7 @@ export function svgRapidFeaturesPixi( projection, context, dispatch ){
     return geoData;
   }
 
-  //#region DRAWING RELATED
+  //#region DRAWING FUNCTIONS
 
   /** Take a Geo Object, Project Polygon Geo coord to Pixel Coords while saving the results in an array of flat arrays */
   function geoProjFlatten( geo ){
@@ -275,24 +443,31 @@ export function svgRapidFeaturesPixi( projection, context, dispatch ){
   }
 
   /** Draw Polygon, LineString and Point */
-  function drawGeo( layer, pathData, graph ){
+  function drawPaths( layer, pathData, graph ){
     let geo, ary, itm, i, pnt;
       for ( let p of pathData ){
         geo = p.asGeoJSON( graph );
         switch ( geo.type ){
           //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
           case 'Polygon' :
-            // **NOTES**
-            // coord = [ [ [x,y],[x,y],[x,y] ], [ [x,y],[x,y],[x,y] ]  ]
+            // **NOTES** coord = [ [ [x,y],[x,y],[x,y] ], [ [x,y],[x,y],[x,y] ]  ]
             // First and Last Points Tend to Match, Need to remove final point if matches for Pixi Rendering
             ary = geoProjFlatten( geo );
-            for ( itm of ary ) layer.drawGraphicPolygon( itm );
+  
+            for ( itm of ary )
+              layer.drawGraphicPolygon( 
+                itm,
+                styles.polygon.fillColorA,
+                styles.polygon.strokeSize,
+                styles.polygon.strokeColor,
+              );
+
           break;
 
           //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
           case 'LineString' :
-            // **NOTES**
-            // coords = [ [x,y], [x,y] ]
+            // **NOTES**  coords = [ [x,y], [x,y] ]
+            // Project + Flatten the Points
             i   = 0;  
             ary = new Array( geo.coordinates.length * 2 );
             for( itm of geo.coordinates ){
@@ -300,28 +475,60 @@ export function svgRapidFeaturesPixi( projection, context, dispatch ){
               ary[ i++ ] = pnt[ 0 ];
               ary[ i++ ] = pnt[ 1 ];
             }
-            layer.drawGraphicPath( ary );
+          
+            layer.drawGraphicPath( ary, styles.line.color, styles.line.size );
           break;
 
           //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-          case 'Point' :
-            // **NOTES**
-            // coords = [ x, y ]
-            pnt = projection( geo.coordinates );
-            layer.drawGraphicCircle( pnt[0], pnt[1] );
-          break;
-
-          //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-          default : console.error( 'Unknown Geo Type : ', geo.type ); break;
+          default : console.error( 'Unknown Path Type : ', geo.type ); break;
         }
       }
   }
 
-  function drawPoints( layer, pointData ){
-    console.log( 'DRAW POINTS', pointData  );
+  function drawVertices( layer, pathData, graph ){
+    // **NOTES**  geo.coordinates = [ x, y ]
+    let p, geo, pnt;
+    for ( p of pathData ){
+      geo = p.asGeoJSON( graph );        
+      pnt = projection( geo.coordinates );
+      layer.drawGraphicCircle( 
+        pnt[ 0 ], pnt[ 1 ], 
+        styles.vertices.radius, 
+        styles.vertices.color,
+        styles.vertices.strokeSize, 
+        styles.vertices.strokeColor
+      );
+    }
+  }
+
+  function drawPoints( layer, pathData, graph ){
+    // **NOTES**  geo.coordinates = [ x, y ]
+    let p, geo, pnt;
+    for ( p of pathData ){
+      geo = p.asGeoJSON( graph );        
+      pnt = projection( geo.coordinates );
+
+      // Background Circle : Bigger wtih Fill & Stroke
+      layer.drawGraphicCircle( 
+        pnt[ 0 ], pnt[ 1 ], 
+        styles.point.radiusOut, 
+        styles.point.colorOut,
+        styles.point.strokeSize, 
+        styles.point.strokeColor
+      );
+
+      // Forground Circle : Smaller with Fill Only
+      layer.drawGraphicCircle( 
+        pnt[ 0 ], pnt[ 1 ], 
+        styles.point.radiusIn, 
+        styles.point.colorIn
+      );
+
+    }
   }
 
   // #endregion
+
 
   render.showAll = function() {
     return _enabled;

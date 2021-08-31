@@ -7,10 +7,17 @@
     --polygon-fill-line-size    : 1.5;
     --polygon-fill-angle        : 22; /* Rotation in Degrees */
 
-    --point-color               : #ff0000;
-    --point-radius              : 5;
-    --point-stroke-color        : #00ffff;
-    --point-stroke-size         : 4;
+    --vertices-color            : #ff0000;
+    --vertices-radius           : 5;
+    --vertices-stroke-color     : #00ffff;
+    --vertices-stroke-size      : 4;
+
+    --point-color-in            : #00ffff;
+    --point-color-out           : #000000;
+    --point-radius-in           : 5;
+    --point-radius-out          : 8;
+    --point-stroke-color        : #ffffff;
+    --point-stroke-size         : 2;
 
     --line-color                : #00ffff;
     --line-size                 : 4;

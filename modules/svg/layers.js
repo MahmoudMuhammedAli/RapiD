@@ -23,7 +23,8 @@ import { utilGetDimensions, utilSetDimensions } from '../util/dimensions';
 import { svgRapidFeatures }         from './rapid_features';
 import { svgRapidFeaturesCanvas }   from './rapid_features_canvas';
 import { svgRapidFeaturesPixi }     from './rapid_features_pixi';
-import { SVGLayer, CanvasLayer, PixiLayer } from "../layers/index.js";
+import { svgRapidFeaturesPixiExt }     from './rapid_features_pixiExt';
+import { SVGLayer, CanvasLayer, PixiLayer } from '../layers/index.js';
 
 //##########################################################################
 
@@ -35,7 +36,8 @@ export function svgLayers(projection, context) {
     var _layers     = [
         new SVGLayer( 'ai-features',            svgRapidFeatures( projection, context, dispatch ) ),
         //new CanvasLayer( 'ai-features-cv',      svgRapidFeaturesCanvas( projection, context, dispatch ) ),
-        new PixiLayer( 'ai-features-px',        svgRapidFeaturesPixi( projection, context, dispatch ) ),
+        //new PixiLayer( 'ai-features-px',        svgRapidFeaturesPixi( projection, context, dispatch ) ),     // Single Graphic Object Renders Everything
+        new PixiLayer( 'ai-features-pxExt',     svgRapidFeaturesPixiExt( projection, context, dispatch ) ),  // Each Item is a Graphic Object, but can do Click+Hover
         /*
         new SVGLayer( 'osm',                    svgOsm( projection, context, dispatch ) ),
         new SVGLayer( 'notes',                  svgNotes( projection, context, dispatch) ),
@@ -118,7 +120,7 @@ export function svgLayers(projection, context) {
                 initBuildDom( root );   // Create DOM Elements JIT
                 svg = selection.selectAll( '.surface' );
             }
-            
+
             //for ( const l of _layers ) l.layer( d3_select( l.svgGroup ) );   // Update Layers by calling its Function with a select( svg.g );
             //for ( const l of _layers ) l.layer( l.svgGroup );   // Update Layers by calling its Function with a select( svg.g );
             for ( const l of _layers ) l.update();
@@ -168,7 +170,7 @@ export function svgLayers(projection, context) {
 
     drawLayers.dimensions = function(val) {
         if ( !arguments.length ) return utilGetDimensions( _layers[0].svg ); // TODO: This line is BAD, Figure out a better way to get Size
-        
+
         for ( const l of _layers ){
             if ( l.isReady ) l.setSize( val );
         }

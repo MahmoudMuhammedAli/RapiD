@@ -79,9 +79,10 @@ class PixiLayer extends BaseLayer{
     //#endregion //////////////////////////////////////////////////////////////////////
 
     //#region PIXI METHODS
-    render(){ this.app.render();            return this; } 
-    clear(){  this.app.renderer.clear();    return this; }
-    add( o ){ this.app.stage.addChild( o ); return this; }
+    render(){    this.app.render();               return this; } 
+    clear(){     this.app.renderer.clear();       return this; }
+    add( o ){    this.app.stage.addChild( o );    return this; }
+    remove( o ){ this.app.stage.removeChild( o ); return this; }
 
     // Create & Adds a color sprite to the scene
     colorSprite( color=0xff0000, w=20, h=20, pos=null ){

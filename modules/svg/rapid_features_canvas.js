@@ -4,7 +4,7 @@ import { select as d3_select} from 'd3-selection';
 import { geoScaleToZoom } from '@id-sdk/geo';
 import { services } from '../services';
 import { svgPath, svgPointTransform } from './index';
-import { utilStringQs } from '../util';
+import { utilStringQs } from '@id-sdk/util';
 import { GraphDataProvider } from 'mapillary-js';
 
 let _enabled = false;
